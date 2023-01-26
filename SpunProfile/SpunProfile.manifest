@@ -1,0 +1,13 @@
+{
+	"autodeskProduct":	"Fusion360",
+	"type":	"addin",
+	"id":	"5bc84462-954a-4213-92cc-fcaf20138a12",
+	"author":	"kantoku",
+	"description":	{
+		"":	"回転プロファイルの作成・・・の挑戦"
+	},
+	"version":	"0.0.1",
+	"runOnStartup":	false,
+	"supportedOS":	"windows|mac",
+	"editEnabled":	true
+}
