@@ -4,11 +4,13 @@
 # If you want to add an additional command, duplicate one of the existing directories and import it here.
 # You need to use aliases (import "entry" as "my_module") assuming you have the default module named "entry".
 from .SpunProfile_Cone import entry as SpunProfile_Cone
+from .SpunProfile_Spin import entry as SpunProfile_Spin
 
 # TODO add your imported modules to this list.
 # Fusion will automatically call the start() and stop() functions.
 commands = [
-    SpunProfile_Cone,
+    # SpunProfile_Cone,
+    SpunProfile_Spin,
 ]
 
 
