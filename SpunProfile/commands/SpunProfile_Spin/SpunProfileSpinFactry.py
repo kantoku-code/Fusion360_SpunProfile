@@ -59,19 +59,37 @@ class SpunProfileFactry():
 
     def _get_profile_base_faces(
         self,
-        axis: core.InfiniteLine3D,
-        value: float
+        faceBody: fusion.BRepBody,
+        matrixList: list
     ) -> list:
 
+        faces = [self.tmpMgr.copy(faceBody) for _ in matrixList]
+        [self.tmpMgr.transform(face, mat) for face, mat in zip(faces, matrixList)]
 
-        self._get_large_face(
-                    self.root.yConstructionAxis.geometry,
-                    core.Point3D.create(
-                        self.largeValue,
-                        0,
-                        0,
-                    )
-                )
+        return faces
+
+
+    def _get_rotation_matrix_list(
+        self,
+        angles: list
+    ) -> list:
+
+        '''
+        断面用のY軸回転マトリックス取得
+        '''
+
+        matLst = []
+        for ang in angles:
+            mat: core.Matrix3D = core.Matrix3D.create()
+            mat.setToRotation(
+                math.radians(ang),
+                self.root.yConstructionAxis.geometry.direction,
+                self.root.originConstructionPoint.geometry,
+            )
+            matLst.append(mat)
+
+        return matLst
+
 
     def get_spun_profile_body(
         self,
@@ -113,19 +131,38 @@ class SpunProfileFactry():
             # vector
         )
 
-        sectionFace: fusion.BRepBody = self._get_large_face(
-            self.root.yConstructionAxis.geometry,
-            core.Point3D.create(
-                self.largeValue,
-                0,
-                0,
-            )
+        # sectionFace: fusion.BRepBody = self._get_large_face(
+        #     self.root.yConstructionAxis.geometry,
+        #     core.Point3D.create(
+        #         self.largeValue,
+        #         0,
+        #         0,
+        #     )
+        # )
+        # self._draw_bodies([sectionFace])
+
+        sectionMats: list = self._get_rotation_matrix_list(
+            [0, 90, 180, 270]
         )
 
-        count = 360
+        sectionFaces: list = self._get_profile_base_faces(
+            # sectionFace,
+            self._get_large_face(
+                self.root.yConstructionAxis.geometry,
+                core.Point3D.create(
+                    self.largeValue,
+                    0,
+                    0,
+                )
+            ),
+            sectionMats
+        )
+        # self._draw_bodies(sectionFaces)
+
+        count = 90
         mat: core.Matrix3D = core.Matrix3D.create()
         mat.setToRotation(
-            math.radians(360 / count),
+            math.radians(90 / count),
             self.root.yConstructionAxis.geometry.direction,
             self.root.originConstructionPoint.geometry,
         )
@@ -134,104 +171,48 @@ class SpunProfileFactry():
         self.tmpMgr.transform(toolBaseBody, toOriginMat)
 
         for idx in range(count):
-            toolBody: fusion.BRepBody = self.tmpMgr.copy(toolBaseBody)
-            try:
-                self.tmpMgr.booleanOperation(
-                    sectionFace,
-                    toolBody,
-                    fusion.BooleanTypes.DifferenceBooleanType
-                )
-            except:
-                print(f'ng:{idx}')
+            toolAngBody: fusion.BRepBody = self.tmpMgr.copy(toolBaseBody)
+            for sectIdx, sectionFace in enumerate(sectionFaces):
+                toolBody: fusion.BRepBody = self.tmpMgr.copy(toolAngBody)
+                try:
+                    self.tmpMgr.booleanOperation(
+                        sectionFace,
+                        toolBody,
+                        fusion.BooleanTypes.DifferenceBooleanType
+                    )
+                except:
+                    print(f'ng:{idx}-{sectIdx}')
             self.tmpMgr.transform(
                 toolBaseBody,
                 mat
             )
 
-        resBody: fusion.BRepBody = self._get_large_face(
-                self.root.yConstructionAxis.geometry,
-                core.Point3D.create(
-                    self.largeValue,
-                    0,
-                    0,
-                )
-            )
+        self._draw_bodies(sectionFaces)
 
-        self.tmpMgr.booleanOperation(
-            resBody,
-            sectionFace,
-            fusion.BooleanTypes.DifferenceBooleanType
-        )
-
-        fromOriginMat: core.Matrix3D = toOriginMat
-        fromOriginMat.invert()
-
-        self.tmpMgr.transform(
-            resBody,
-            fromOriginMat
-        )
-
-        # bbb = self.tmpMgr.copy(self.body)
-        # self.tmpMgr.transform(bbb, toOriginMat)
-        self._draw_bodies([resBody])
-
-        # unitVec: core.Vector3D = vector.copy()
-        # unitVec.scaleBy(pitch / vector.length)
-
-        # count = int(vector.length / pitch) + 1
-        # point: core.Point3D = startPoint.copy()
-
-        # cylinder_data = []
-        # for _ in range(count):
-        #     checkPlane: core.Plane = core.Plane.create(
-        #         point,
-        #         self.axis.direction
-        #     )
-
-        #     interBody: fusion.BRepBody = self.tmpMgr.planeIntersection(
-        #         self.body,
-        #         checkPlane
-        #     )
-
-        #     measMgr: core.MeasureManager = self.app.measureManager
-        #     res: core.MeasureResults = measMgr.measureMinimumDistance(
-        #         interBody,
-        #         self.cylinder
-        #     )
-
-        #     cylinder_data.append(
-        #         (
-        #             point.copy(),
-        #             self.largeValue - res.value
+        # resBody: fusion.BRepBody = self._get_large_face(
+        #         self.root.yConstructionAxis.geometry,
+        #         core.Point3D.create(
+        #             self.largeValue,
+        #             0,
+        #             0,
         #         )
         #     )
 
-        #     point.translateBy(unitVec)
-
-        # corns = []
-        # for cyl1, cyl2 in zip(cylinder_data, cylinder_data[1:]):
-        #     corns.append(
-        #         self.tmpMgr.createCylinderOrCone(
-        #             cyl1[0],
-        #             cyl1[1],
-        #             cyl2[0],
-        #             cyl2[1],
-        #         )
-        #     )
-
-        # resBody: fusion.BRepBody = self._get_union_body(corns)
-
-        # displyPitch = self._get_disply_pitch_str(pitch)
-        # occ: fusion.Occurrence = self._create_occ(
-        #     'SpunProfile_' + f'pitch_{displyPitch}'
+        # self.tmpMgr.booleanOperation(
+        #     resBody,
+        #     sectionFace,
+        #     fusion.BooleanTypes.DifferenceBooleanType
         # )
 
-        # self._draw_bodies(
-        #     [
-        #         resBody
-        #     ],
-        #     occ,
+        # fromOriginMat: core.Matrix3D = toOriginMat
+        # fromOriginMat.invert()
+
+        # self.tmpMgr.transform(
+        #     resBody,
+        #     fromOriginMat
         # )
+
+        # self._draw_bodies([resBody])
 
         self.app.log(
             f'spun_profile_spin time:{time.time() - startTime}s'
