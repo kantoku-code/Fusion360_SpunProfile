@@ -57,6 +57,21 @@ class SpunProfileFactry():
 
         return fromMat
 
+    def _get_profile_base_faces(
+        self,
+        axis: core.InfiniteLine3D,
+        value: float
+    ) -> list:
+
+
+        self._get_large_face(
+                    self.root.yConstructionAxis.geometry,
+                    core.Point3D.create(
+                        self.largeValue,
+                        0,
+                        0,
+                    )
+                )
 
     def get_spun_profile_body(
         self,
@@ -107,12 +122,12 @@ class SpunProfileFactry():
             )
         )
 
-        count = 18
+        count = 360
         mat: core.Matrix3D = core.Matrix3D.create()
         mat.setToRotation(
-            math.radians(180 / count),
-            self.root.yConstructionAxis.definition,
-            self.root.originConstructionPoint,
+            math.radians(360 / count),
+            self.root.yConstructionAxis.geometry.direction,
+            self.root.originConstructionPoint.geometry,
         )
 
         toolBaseBody: fusion.BRepBody = self.tmpMgr.copy(self.body)
@@ -133,10 +148,32 @@ class SpunProfileFactry():
                 mat
             )
 
+        resBody: fusion.BRepBody = self._get_large_face(
+                self.root.yConstructionAxis.geometry,
+                core.Point3D.create(
+                    self.largeValue,
+                    0,
+                    0,
+                )
+            )
+
+        self.tmpMgr.booleanOperation(
+            resBody,
+            sectionFace,
+            fusion.BooleanTypes.DifferenceBooleanType
+        )
+
+        fromOriginMat: core.Matrix3D = toOriginMat
+        fromOriginMat.invert()
+
+        self.tmpMgr.transform(
+            resBody,
+            fromOriginMat
+        )
 
         # bbb = self.tmpMgr.copy(self.body)
         # self.tmpMgr.transform(bbb, toOriginMat)
-        self._draw_bodies([sectionFace])
+        self._draw_bodies([resBody])
 
         # unitVec: core.Vector3D = vector.copy()
         # unitVec.scaleBy(pitch / vector.length)
@@ -196,9 +233,9 @@ class SpunProfileFactry():
         #     occ,
         # )
 
-        # self.app.log(
-        #     f'spun_profile_cone pitch:{displyPitch} time:{time.time() - startTime}s'
-        # )
+        self.app.log(
+            f'spun_profile_spin time:{time.time() - startTime}s'
+        )
 
 
     def _get_disply_pitch_str(
@@ -244,6 +281,19 @@ class SpunProfileFactry():
         return self._get_boolean_body(
             bodyLst,
             fusion.BooleanTypes.UnionBooleanType
+        )
+
+
+    def _get_diff_body(
+        self,
+        bodyLst: list) -> fusion.BRepBody:
+        '''
+        ブーリアン差のボディ取得
+        '''
+
+        return self._get_boolean_body(
+            bodyLst,
+            fusion.BooleanTypes.DifferenceBooleanType
         )
 
 
