@@ -3,7 +3,7 @@ import adsk
 import adsk.core as core
 import adsk.fusion as fusion
 
-class DrawCGFactry():
+class CustomGraphicsManager():
 
     def __init__(
         self
@@ -12,11 +12,11 @@ class DrawCGFactry():
         コンストラクタ
         '''
 
-        self.app = core.Application.cast(None)
-        self.des :fusion.Design = self.app.activeProduct
-        self.root :fusion.Component = self.des.rootComponent
+        self.app: core.Application = core.Application.get()
+        self.des: fusion.Design = self.app.activeProduct
+        self.root: fusion.Component = self.des.rootComponent
 
-        self.cgGroup = fusion.CustomGraphicsGroup.cast(None)
+        self.cgGroup: fusion.CustomGraphicsGroup = None
 
         self.solidRed = fusion.CustomGraphicsSolidColorEffect.create(
             core.Color.create(255,0,0,255)
@@ -65,9 +65,7 @@ class DrawCGFactry():
         '''
 
         self.removeCG()
-        des :fusion.Design = self.app.activeProduct
-        root :fusion.Component = des.rootComponent
-        self.cgGroup = root.customGraphicsGroups.add()
+        self.cgGroup = self.root.customGraphicsGroups.add()
 
 
     def update(
@@ -88,3 +86,6 @@ class DrawCGFactry():
         cgBdy = self.cgGroup.addBRepBody(targetBody)
         cgBdy.color = self.solidRed
         cgBdy.weight = 2
+
+        adsk.doEvents()
+        self.app.activeViewport.refresh()

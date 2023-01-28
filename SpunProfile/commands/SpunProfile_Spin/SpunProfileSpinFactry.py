@@ -2,8 +2,11 @@ import traceback
 import adsk
 import adsk.core as core
 import adsk.fusion as fusion
+from .CustomGraphicsManager import CustomGraphicsManager
 import math
 import time
+
+TOTAL_ROTATION_ANGLE = 180
 
 class SpunProfileFactry():
     def __init__(self) -> None:
@@ -12,11 +15,14 @@ class SpunProfileFactry():
 
         des: fusion.Design = self.app.activeProduct
         self.root: fusion.Component = des.rootComponent
+        self.viewport: core.Viewport = self.app.activeViewport
 
-        self.largeValue = 1000000
+        self.largeValue = 1000000 # 仮の値
         self.body: fusion.BRepBody = None
         self.axis: core.InfiniteLine3D = None
         self.sideVector: core.Vector3D = None
+
+        self.camera: core.Camera = None
 
     def has_axis(
         self,
@@ -28,12 +34,56 @@ class SpunProfileFactry():
 
         return True if self._get_axis(entity) else False
 
+    def _hide_all_bodies(
+        self
+    ) -> core.ObjectCollection:
+        '''
+        表示されているボディを全て非表示
+        '''
+
+        showBodies: core.ObjectCollection = self.root.findBRepUsingPoint(
+            core.Point3D.create(0,0,0),
+            fusion.BRepEntityTypes.BRepBodyEntityType,
+            1000000000000,
+            True
+        )
+        for body in showBodies:
+            body.isLightBulbOn = False
+
+        return showBodies
+
+    def _move_to_origin_camera(
+        self
+    ) -> None:
+        '''
+        カメラを原点に移動
+        '''
+
+        camera = self.viewport.camera
+        cameraVec: core.Vector3D = camera.target.vectorTo(
+            core.Point3D.create(0,0,0)
+        )
+
+        targetPnt: core.point3D = camera.target
+        targetPnt.translateBy(cameraVec)
+        camera.target = targetPnt
+
+        eyePnt: core.point3D = camera.eye
+        eyePnt.translateBy(cameraVec)
+        camera.eye = eyePnt
+
+        camera.isSmoothTransition = False
+
+        self.viewport.camera = camera
+        self.viewport.refresh()
+
 
     def get_spun_profile_body(
         self,
         body: fusion.BRepBody,
         axisEntity,
-        count: int
+        count: int,
+        isAnimation: bool,
     ) -> None:
         '''
         回転ボディの取得
@@ -51,6 +101,11 @@ class SpunProfileFactry():
             self.axis.direction
         )
         self.sideVector = bBox.widthDirection
+        self.largeValue = max(
+            bBox.height,
+            bBox.length,
+            bBox.width,
+        ) * 1.01
 
         # 端面部取得
         (_, edgeface1, _) = self._get_cylinder_face(
@@ -72,10 +127,10 @@ class SpunProfileFactry():
         # 断面用の面
         sectionFace: fusion.BRepBody = self._get_large_face_xy(self.largeValue)
 
-        # 回転用マトリックス 180Degで作業する
+        # 回転用マトリックス
         mat: core.Matrix3D = core.Matrix3D.create()
         mat.setToRotation(
-            math.radians(180 / count),
+            math.radians(TOTAL_ROTATION_ANGLE / count),
             self.root.yConstructionAxis.geometry.direction,
             self.root.originConstructionPoint.geometry,
         )
@@ -84,7 +139,28 @@ class SpunProfileFactry():
         toolBaseBody: fusion.BRepBody = self.tmpMgr.copy(self.body)
         self.tmpMgr.transform(toolBaseBody, toOriginMat)
 
+        
+
+        if isAnimation:
+            self.app.executeTextCommand(
+                u'Transaction.Start {}'.format('SpunProfileSpin')
+            )
+
+            # 全てのボディ非表示
+            self._hide_all_bodies()
+
+            # カメラのバックアップ
+            self.camera = self.viewport.camera
+            self.camera.isSmoothTransition = False
+
+            # 原点に移動
+            self._move_to_origin_camera()
+
+            # cg
+            cgMgr = CustomGraphicsManager()
+
         # 回転させ削りまくる
+        
         for idx in range(count):
             toolBody: fusion.BRepBody = self.tmpMgr.copy(toolBaseBody)
             try:
@@ -96,10 +172,21 @@ class SpunProfileFactry():
             except:
                 print(f'ng:{idx}')
 
+            if isAnimation and idx % 2 == 0:
+                cgMgr.update(sectionFace, toolBody)
+
             self.tmpMgr.transform(
                 toolBaseBody,
                 mat
             )
+        if isAnimation:
+            cgMgr.removeCG()
+
+            self.viewport.camera = self.camera
+            self.viewport.refresh()
+
+            self.app.executeTextCommand(u'Transaction.Abort')
+
 
         # Xのマイナス半面だけ取得
         sectHalf = self._get_intersect_body(

@@ -50,10 +50,20 @@ _bodyIpt: core.SelectionCommandInput = None
 _axisIpt: core.SelectionCommandInput = None
 _toleranceIpt: core.DropDownCommandInput = None
 _toleranceItems: dict = {
-    '高': 180 / 1,
-    '中': 180 / 2,
-    '低': 180 / 20, #5,
+    '高': {
+        'value': 180 / 1,
+        'select': False,
+    },
+    '中': {
+        'value': 180 / 2,
+        'select': True,
+    },
+    '低': {
+        'value': 180 / 5,
+        'select': False,
+    },
 }
+_animationIpt: core.BoolValueCommandInput = None
 
 _fact: 'SpunProfileFactry' = None
 
@@ -153,8 +163,16 @@ def command_created(args: core.CommandCreatedEventArgs):
     )
     tolListItems: core.ListItems = _toleranceIpt.listItems
     for key in _toleranceItems.keys():
-        tolListItems.add(key, False, '')
-    tolListItems[0].isSelected = True
+        tolListItems.add(key, _toleranceItems[key]['select'], '')
+
+    global _animationIpt
+    _animationIpt = inputs.addBoolValueInput(
+        '_animationIptId',
+        'アニメーションを表示する',
+        True,
+        '',
+        False
+    )
 
     # **event**
     futil.add_handler(
@@ -236,15 +254,23 @@ def command_destroy(args: core.CommandEventArgs):
 def command_execute(args: core.CommandEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
-    global _toleranceIpt, _toleranceItems
-    value = _toleranceItems[_toleranceIpt.selectedItem.name]
-
     global _bodyIpt, _axisIpt, _fact
 
+    body: fusion.BRepBody = _bodyIpt.selection(0).entity
+    _bodyIpt.clearSelection()
+
+    axis = _axisIpt.selection(0).entity
+    _axisIpt.clearSelection()
+
+    global _toleranceIpt, _toleranceItems
+    value = _toleranceItems[_toleranceIpt.selectedItem.name]['value']
+
+    global _animationIpt
     _fact.get_spun_profile_body(
-        _bodyIpt.selection(0).entity,
-        _axisIpt.selection(0).entity,
-        int(value)
+        body,
+        axis,
+        int(value),
+        _animationIpt.value,
     )
 
 
