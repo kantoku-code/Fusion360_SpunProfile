@@ -1,11 +1,11 @@
-import adsk.core
-import adsk.fusion
+import adsk.core as core
+import adsk.fusion as fusion
 import os
 from ...lib import fusion360utils as futil
 from ... import config
 from .SpunProfileConeFactry import SpunProfileFactry
 
-app = adsk.core.Application.get()
+app = core.Application.get()
 ui = app.userInterface
 
 
@@ -30,6 +30,10 @@ PANEL_ID = config.create_panel_id
 PANEL_NAME = config.create_panel_name
 PANEL_AFTER = config.create_panel_after
 
+# DROPDOWN_ID = config.dropdown_id
+# DROPDOWN_TEXT = config.dropdown_text
+DROPDOWN = config.dropDown
+
 COMMAND_BESIDE_ID = ''
 
 # コマンドアイコンのリソースの場所、ここではこのディレクトリの中に
@@ -46,9 +50,9 @@ ICON_FOLDER = os.path.join(
 # それらは解放されず、ガベージコレクションされません。
 local_handlers = []
 
-_bodyIpt: adsk.core.SelectionCommandInput = None
-_axisIpt: adsk.core.SelectionCommandInput = None
-_pitchIpt: adsk.core.ValueCommandInput = None
+_bodyIpt: core.SelectionCommandInput = None
+_axisIpt: core.SelectionCommandInput = None
+_pitchIpt: core.ValueCommandInput = None
 
 _fact: 'SpunProfileFactry' = None
 
@@ -69,19 +73,22 @@ def start():
 
     # ******** ユーザーがコマンドを実行できるように、UIにボタンを追加します。 ********
     # ボタンが作成される対象のワークスペースを取得します。
-    workspace = ui.workspaces.itemById(WORKSPACE_ID)
+    # workspace = ui.workspaces.itemById(WORKSPACE_ID)
 
-    toolbar_tab = workspace.toolbarTabs.itemById(TAB_ID)
-    if toolbar_tab is None:
-        toolbar_tab = workspace.toolbarTabs.add(TAB_ID, TAB_NAME)
+    # toolbar_tab = workspace.toolbarTabs.itemById(TAB_ID)
+    # if toolbar_tab is None:
+    #     toolbar_tab = workspace.toolbarTabs.add(TAB_ID, TAB_NAME)
 
-    # ボタンが作成されるパネルを取得します。
-    panel = workspace.toolbarPanels.itemById(PANEL_ID)
-    if panel is None:
-        panel = toolbar_tab.toolbarPanels.add(PANEL_ID, PANEL_NAME, PANEL_AFTER, False)
+    # # ボタンが作成されるパネルを取得します。
+    # panel = workspace.toolbarPanels.itemById(PANEL_ID)
+    # if panel is None:
+    #     panel = toolbar_tab.toolbarPanels.add(PANEL_ID, PANEL_NAME, PANEL_AFTER, False)
+
+    # ドロップダウン
+    dropDown: core.DropDownControl = config.dropDown
 
     # 指定された既存のコマンドの後に、UI のボタンコマンド制御を作成します。
-    control = panel.controls.addCommand(cmd_def, COMMAND_BESIDE_ID, False)
+    control = dropDown.controls.addCommand(cmd_def, COMMAND_BESIDE_ID, False)
 
     # コマンドをメインツールバーに昇格させるかどうかを指定します。
     control.isPromoted = IS_PROMOTED
@@ -104,14 +111,14 @@ def stop():
         command_definition.deleteMe()
 
 
-def command_created(args: adsk.core.CommandCreatedEventArgs):
+def command_created(args: core.CommandCreatedEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
-    cmd: adsk.core.Command = adsk.core.Command.cast(args.command)
+    cmd: core.Command = core.Command.cast(args.command)
     cmd.isPositionDependent = True
 
     # **inputs**
-    inputs: adsk.core.CommandInputs = cmd.commandInputs
+    inputs: core.CommandInputs = cmd.commandInputs
 
     global _bodyIpt
     _bodyIpt = inputs.addSelectionInput(
@@ -120,7 +127,7 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
         '該当するソリッドボディを選択してください'
     )
     _bodyIpt.setSelectionLimits(0)
-    _bodyIpt.addSelectionFilter(adsk.core.SelectionCommandInput.SolidBodies)
+    _bodyIpt.addSelectionFilter(core.SelectionCommandInput.SolidBodies)
     _bodyIpt.tooltip = 'ソリッドボディが選択可能です'
 
     global _axisIpt
@@ -131,22 +138,22 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     )
     _axisIpt.setSelectionLimits(0)
     filterLst = [
-        adsk.core.SelectionCommandInput.ConstructionLines,
-        # adsk.core.SelectionCommandInput.SketchLines,
-        adsk.core.SelectionCommandInput.CylindricalFaces,
-        adsk.core.SelectionCommandInput.ConicalFaces,
-        adsk.core.SelectionCommandInput.LinearEdges,
+        core.SelectionCommandInput.ConstructionLines,
+        # core.SelectionCommandInput.SketchLines,
+        core.SelectionCommandInput.CylindricalFaces,
+        core.SelectionCommandInput.ConicalFaces,
+        core.SelectionCommandInput.LinearEdges,
     ]
     [_axisIpt.addSelectionFilter(f) for f in filterLst]
     _axisIpt.tooltip = '構築軸・円筒面・円錐面・直線のエッジが選択可能です'
 
     global _pitchIpt
-    unitMgr: adsk.core.UnitsManager = futil.app.activeProduct.unitsManager
+    unitMgr: core.UnitsManager = futil.app.activeProduct.unitsManager
     _pitchIpt = inputs.addValueInput(
         '_pitchIptId',
         'ピッチ',
         unitMgr.defaultLengthUnits,
-        adsk.core.ValueInput.createByReal(0.1)
+        core.ValueInput.createByReal(0.1)
     )
     _pitchIpt.minimumValue = 0.0001
     minValueDisp = unitMgr.convert(
@@ -198,7 +205,7 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     _fact = SpunProfileFactry()
 
 
-def command_validateInputs(args: adsk.core.ValidateInputsEventArgs):
+def command_validateInputs(args: core.ValidateInputsEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
     global _bodyIpt, _axisIpt
@@ -208,7 +215,7 @@ def command_validateInputs(args: adsk.core.ValidateInputsEventArgs):
         args.areInputsValid = False
 
 
-def command_preSelect(args: adsk.core.SelectionEventArgs):
+def command_preSelect(args: core.SelectionEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
     if args.activeInput.selectionCount > 0:
@@ -221,18 +228,18 @@ def command_preSelect(args: adsk.core.SelectionEventArgs):
     args.isSelectable =  _fact.has_axis(args.selection.entity)
 
 
-def command_destroy(args: adsk.core.CommandEventArgs):
+def command_destroy(args: core.CommandEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
     global local_handlers
     local_handlers = []
 
 
-# def command_executePreview(args: adsk.core.CommandEventArgs):
+# def command_executePreview(args: core.CommandEventArgs):
 #     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
 
-def command_execute(args: adsk.core.CommandEventArgs):
+def command_execute(args: core.CommandEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
     global _bodyIpt, _axisIpt, _pitchIpt, _fact
@@ -243,7 +250,7 @@ def command_execute(args: adsk.core.CommandEventArgs):
     )
 
 
-def command_inputChanged(args: adsk.core.InputChangedEventArgs):
+def command_inputChanged(args: core.InputChangedEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
     global _bodyIpt, _axisIpt, _fact
@@ -262,14 +269,14 @@ def command_inputChanged(args: adsk.core.InputChangedEventArgs):
 
 
 def get_click_face(
-    sel: adsk.core.Selection) -> adsk.fusion.BRepFace:
+    sel: core.Selection) -> fusion.BRepFace:
 
-    des: adsk.fusion.Design = futil.app.activeProduct
-    root: adsk.fusion.Component = des.rootComponent
+    des: fusion.Design = futil.app.activeProduct
+    root: fusion.Component = des.rootComponent
 
     entities = root.findBRepUsingPoint(
         sel.point,
-        adsk.fusion.BRepEntityTypes.BRepFaceEntityType,
+        fusion.BRepEntityTypes.BRepFaceEntityType,
         0.1
     )
 

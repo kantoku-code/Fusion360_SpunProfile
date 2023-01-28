@@ -30,6 +30,9 @@ PANEL_ID = config.create_panel_id
 PANEL_NAME = config.create_panel_name
 PANEL_AFTER = config.create_panel_after
 
+DROPDOWN_ID = config.dropdown_id
+DROPDOWN_TEXT = config.dropdown_text
+
 COMMAND_BESIDE_ID = ''
 
 # コマンドアイコンのリソースの場所、ここではこのディレクトリの中に
@@ -84,19 +87,22 @@ def start():
 
     # ******** ユーザーがコマンドを実行できるように、UIにボタンを追加します。 ********
     # ボタンが作成される対象のワークスペースを取得します。
-    workspace = ui.workspaces.itemById(WORKSPACE_ID)
+    # workspace = ui.workspaces.itemById(WORKSPACE_ID)
 
-    toolbar_tab = workspace.toolbarTabs.itemById(TAB_ID)
-    if toolbar_tab is None:
-        toolbar_tab = workspace.toolbarTabs.add(TAB_ID, TAB_NAME)
+    # toolbar_tab = workspace.toolbarTabs.itemById(TAB_ID)
+    # if toolbar_tab is None:
+    #     toolbar_tab = workspace.toolbarTabs.add(TAB_ID, TAB_NAME)
 
-    # ボタンが作成されるパネルを取得します。
-    panel = workspace.toolbarPanels.itemById(PANEL_ID)
-    if panel is None:
-        panel = toolbar_tab.toolbarPanels.add(PANEL_ID, PANEL_NAME, PANEL_AFTER, False)
+    # # ボタンが作成されるパネルを取得します。
+    # panel = workspace.toolbarPanels.itemById(PANEL_ID)
+    # if panel is None:
+    #     panel = toolbar_tab.toolbarPanels.add(PANEL_ID, PANEL_NAME, PANEL_AFTER, False)
+
+    # ドロップダウン
+    dropDown: core.DropDownControl = config.dropDown
 
     # 指定された既存のコマンドの後に、UI のボタンコマンド制御を作成します。
-    control = panel.controls.addCommand(cmd_def, COMMAND_BESIDE_ID, False)
+    control = dropDown.controls.addCommand(cmd_def, COMMAND_BESIDE_ID, False)
 
     # コマンドをメインツールバーに昇格させるかどうかを指定します。
     control.isPromoted = IS_PROMOTED
@@ -108,6 +114,7 @@ def stop():
     workspace = ui.workspaces.itemById(WORKSPACE_ID)
     panel = workspace.toolbarPanels.itemById(PANEL_ID)
     command_control = panel.controls.itemById(CMD_ID)
+    dropdown = panel.controls.itemById(DROPDOWN_ID)
     command_definition = ui.commandDefinitions.itemById(CMD_ID)
 
     # ボタンコマンドの制御を削除する。
@@ -117,6 +124,10 @@ def stop():
     # コマンドの定義を削除します。
     if command_definition:
         command_definition.deleteMe()
+
+    # ドロップダウンを削除
+    if dropdown:
+        dropdown.deleteMe()
 
 
 def command_created(args: core.CommandCreatedEventArgs):

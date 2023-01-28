@@ -7,6 +7,7 @@ import math
 import time
 
 TOTAL_ROTATION_ANGLE = 180
+DEBUG = True
 
 class SpunProfileFactry():
     def __init__(self) -> None:
@@ -33,49 +34,6 @@ class SpunProfileFactry():
         '''
 
         return True if self._get_axis(entity) else False
-
-    def _hide_all_bodies(
-        self
-    ) -> core.ObjectCollection:
-        '''
-        表示されているボディを全て非表示
-        '''
-
-        showBodies: core.ObjectCollection = self.root.findBRepUsingPoint(
-            core.Point3D.create(0,0,0),
-            fusion.BRepEntityTypes.BRepBodyEntityType,
-            1000000000000,
-            True
-        )
-        for body in showBodies:
-            body.isLightBulbOn = False
-
-        return showBodies
-
-    def _move_to_origin_camera(
-        self
-    ) -> None:
-        '''
-        カメラを原点に移動
-        '''
-
-        camera = self.viewport.camera
-        cameraVec: core.Vector3D = camera.target.vectorTo(
-            core.Point3D.create(0,0,0)
-        )
-
-        targetPnt: core.point3D = camera.target
-        targetPnt.translateBy(cameraVec)
-        camera.target = targetPnt
-
-        eyePnt: core.point3D = camera.eye
-        eyePnt.translateBy(cameraVec)
-        camera.eye = eyePnt
-
-        camera.isSmoothTransition = False
-
-        self.viewport.camera = camera
-        self.viewport.refresh()
 
 
     def get_spun_profile_body(
@@ -139,8 +97,7 @@ class SpunProfileFactry():
         toolBaseBody: fusion.BRepBody = self.tmpMgr.copy(self.body)
         self.tmpMgr.transform(toolBaseBody, toOriginMat)
 
-        
-
+        # アニメ準備
         if isAnimation:
             self.app.executeTextCommand(
                 u'Transaction.Start {}'.format('SpunProfileSpin')
@@ -160,7 +117,6 @@ class SpunProfileFactry():
             cgMgr = CustomGraphicsManager()
 
         # 回転させ削りまくる
-        
         for idx in range(count):
             toolBody: fusion.BRepBody = self.tmpMgr.copy(toolBaseBody)
             try:
@@ -179,6 +135,8 @@ class SpunProfileFactry():
                 toolBaseBody,
                 mat
             )
+
+        # アニメ終了
         if isAnimation:
             cgMgr.removeCG()
 
@@ -187,6 +145,7 @@ class SpunProfileFactry():
 
             self.app.executeTextCommand(u'Transaction.Abort')
 
+        dump_msg(f' -- end spin:{time.time() - startTime}s')
 
         # Xのマイナス半面だけ取得
         sectHalf = self._get_intersect_body(
@@ -235,7 +194,7 @@ class SpunProfileFactry():
             fromOriginMat
         )
 
-        # 出力
+        # サーフェス出力
         displayAngle = 180 / count
         occ: fusion.Occurrence = self._create_occ(
             'SpunProfile_Spin-' + f'Angle_{displayAngle}Deg'
@@ -247,7 +206,9 @@ class SpunProfileFactry():
             ],
             occ,
         )
+        dump_msg(f' -- end surface:{time.time() - startTime}s')
 
+        # スケッチサポート
         sktPlane: fusion.ConstructionPlane = self._create_construction_plane(
             occ,
             startPoint,
@@ -255,25 +216,40 @@ class SpunProfileFactry():
             self.sideVector,
         )
 
+        # スケッチ
         skt: fusion.Sketch = occ.component.sketches.add(
             sktPlane
         )
+        dump_msg(f' -- end sketchn:{time.time() - startTime}s')
+
+        # プロジェクト
+        self._project_edges(skt, bodyList)
+        dump_msg(f' -- end project:{time.time() - startTime}s')
+
+        self.app.log(
+            f'spun_profile_spin time:{time.time() - startTime}s'
+        )
+
+
+    def _project_edges(
+        self,
+        sketch: fusion.Sketch,
+        bodyList: list
+    ) -> None:
+        '''
+        スケッチエッジを投影
+        '''
 
         objs: core.ObjectCollection = core.ObjectCollection.create()
         for b in bodyList:
             [objs.add(e) for e in b.edges]
 
-        skt.isComputeDeferred = True
-        skt.project(objs)
+        sketch.isComputeDeferred = True
+        sketch.project(objs)
         crv: fusion.SketchCurve = None
-        for crv in skt.sketchCurves:
+        for crv in sketch.sketchCurves:
             crv.isReference = False
-        skt.isComputeDeferred = False
-
-
-        self.app.log(
-            f'spun_profile_spin time:{time.time() - startTime}s'
-        )
+        sketch.isComputeDeferred = False
 
 
     def _create_construction_plane(
@@ -687,7 +663,7 @@ class SpunProfileFactry():
             origin,
             vectorX,
             vectorY,
-            vectorZ
+            vectorZ,
         )
 
         fromMat.invert()
@@ -714,3 +690,56 @@ class SpunProfileFactry():
             matLst.append(mat)
 
         return matLst
+
+
+    def _hide_all_bodies(
+        self
+    ) -> core.ObjectCollection:
+        '''
+        表示されているボディを全て非表示
+        '''
+
+        showBodies: core.ObjectCollection = self.root.findBRepUsingPoint(
+            core.Point3D.create(0,0,0),
+            fusion.BRepEntityTypes.BRepBodyEntityType,
+            1000000000000,
+            True
+        )
+        for body in showBodies:
+            body.isLightBulbOn = False
+
+        return showBodies
+
+
+    def _move_to_origin_camera(
+        self
+    ) -> None:
+        '''
+        カメラを原点に移動
+        '''
+
+        camera = self.viewport.camera
+        cameraVec: core.Vector3D = camera.target.vectorTo(
+            core.Point3D.create(0,0,0)
+        )
+
+        targetPnt: core.point3D = camera.target
+        targetPnt.translateBy(cameraVec)
+        camera.target = targetPnt
+
+        eyePnt: core.point3D = camera.eye
+        eyePnt.translateBy(cameraVec)
+        camera.eye = eyePnt
+
+        camera.isSmoothTransition = False
+
+        self.viewport.camera = camera
+        self.viewport.refresh()
+
+
+def dump_msg(msg) -> None:
+    if not DEBUG:
+        return
+
+    app: core.Application = core.Application.get()
+    app.log(msg)

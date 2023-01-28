@@ -21,16 +21,21 @@ COMPANY_NAME = 'KANTOKU'
 design_workspace = 'FusionSolidEnvironment'
 
 # Tabs
-design_tab_id = f'{ADDIN_NAME}_design_tab'
-design_tab_name = f'{ADDIN_NAME}'
+# design_tab_id = f'{ADDIN_NAME}_design_tab'
+# design_tab_name = f'{ADDIN_NAME}'
+design_tab_id = 'SolidTab'
+design_tab_name = ''
 
 # Panels
 # doc_panel_name = 'ドキュメント'
 # doc_panel_id = f'{ADDIN_NAME}_doc_panel'
 # doc_panel_after = ''
 
-create_panel_name = '作成'
-create_panel_id = f'{ADDIN_NAME}_create_panel'
+# create_panel_name = '作成'
+# create_panel_id = f'{ADDIN_NAME}_create_panel'
+# create_panel_after = ''
+create_panel_name = ''
+create_panel_id = 'SolidCreatePanel'
 create_panel_after = ''
 
 # modify_panel_name = '修正'
@@ -45,6 +50,10 @@ create_panel_after = ''
 # inspect_panel_id = f'{ADDIN_NAME}_Inspect_panel'
 # inspect_panel_after = ''
 
+# DropDown
+dropdown_text = '回転プロファイル'
+dropdown_id = f'{ADDIN_NAME}_dropdown_spun_profile'
+
 
 # Reference for use in some commands
 all_workspace_names = [
@@ -53,3 +62,19 @@ all_workspace_names = [
     'FusionDocumentationEnvironment', 'ElectronEmptyLbrEnvironment', 'ElectronDeviceEnvironment',
     'ElectronFootprintEnvironment', 'ElectronSymbolEnvironment', 'ElectronPackageEnvironment'
 ]
+
+import adsk.core as core
+__app = core.Application.get()
+__ui = __app.userInterface
+__workspace = __ui.workspaces.itemById(design_workspace)
+__toolbar_tab = __workspace.toolbarTabs.itemById(design_tab_id)
+__panel = __toolbar_tab.toolbarPanels.itemById(create_panel_id)
+
+# ドロップダウン
+dropDown: core.DropDownControl = __panel.controls.addDropDown(
+    dropdown_text,
+    '',
+    dropdown_id,
+    '',
+    False
+)
