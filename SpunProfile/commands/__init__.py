@@ -9,7 +9,7 @@ from .SpunProfile_Spin import entry as SpunProfile_Spin
 # TODO add your imported modules to this list.
 # Fusion will automatically call the start() and stop() functions.
 commands = [
-    # SpunProfile_Cone,
+    SpunProfile_Cone,
     SpunProfile_Spin,
 ]
 

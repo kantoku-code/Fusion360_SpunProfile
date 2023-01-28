@@ -15,89 +15,26 @@ class SpunProfileFactry():
 
         self.largeValue = 1000000
         self.body: fusion.BRepBody = None
-        self.cylinder: fusion.BRepFace = None
         self.axis: core.InfiniteLine3D = None
         self.sideVector: core.Vector3D = None
 
     def has_axis(
         self,
-        entity) -> bool:
+        entity
+    ) -> bool:
         '''
         軸となる要素か？
         '''
 
         return True if self._get_axis(entity) else False
 
-    def _get_matrix_to_origin(
-        self,
-        origin: core.Point3D,
-        vectorX: core.Vector3D,
-        vectorY: core.Vector3D,
-    ) -> core.Matrix3D:
-
-        '''
-        原点へのマトリックス取得
-        '''
-
-        vectorZ: core.Vector3D = vectorX.crossProduct(vectorY)
-        vectorY: core.Vector3D = vectorZ.crossProduct(vectorX)
-        vectorX.normalize()
-        vectorY.normalize()
-        vectorZ.normalize()
-
-        fromMat: core.Matrix3D = core.Matrix3D.create()
-        fromMat.setWithCoordinateSystem(
-            origin,
-            vectorX,
-            vectorY,
-            vectorZ
-        )
-
-        fromMat.invert()
-
-        return fromMat
-
-    def _get_profile_base_faces(
-        self,
-        faceBody: fusion.BRepBody,
-        matrixList: list
-    ) -> list:
-
-        faces = [self.tmpMgr.copy(faceBody) for _ in matrixList]
-        [self.tmpMgr.transform(face, mat) for face, mat in zip(faces, matrixList)]
-
-        return faces
-
-
-    def _get_rotation_matrix_list(
-        self,
-        angles: list
-    ) -> list:
-
-        '''
-        断面用のY軸回転マトリックス取得
-        '''
-
-        matLst = []
-        for ang in angles:
-            mat: core.Matrix3D = core.Matrix3D.create()
-            mat.setToRotation(
-                math.radians(ang),
-                self.root.yConstructionAxis.geometry.direction,
-                self.root.originConstructionPoint.geometry,
-            )
-            matLst.append(mat)
-
-        return matLst
-
 
     def get_spun_profile_body(
         self,
         body: fusion.BRepBody,
         axisEntity,
-        pitch: float
+        count: int
     ) -> None:
-
         '''
         回転ボディの取得
         '''
@@ -108,136 +45,198 @@ class SpunProfileFactry():
         self.axisEntity = axisEntity
         self.axis = self._get_axis(self.axisEntity)
 
+        # ボディの範囲
         bBox: core.OrientedBoundingBox3D = self._get_boundingBox(
             self.body,
             self.axis.direction
         )
         self.sideVector = bBox.widthDirection
 
-        (self.cylinder, edgeface1, edgeface2) = self._get_cylinder_face(
+        # 端面部取得
+        (_, edgeface1, _) = self._get_cylinder_face(
             bBox,
             self.axis,
             self.largeValue
         )
 
+        # 元の位置での仮原点
         startPoint: core.Point3D = self.axis.intersectWithSurface(edgeface1.geometry)[0]
-        # endPoint: core.Point3D = self.axis.intersectWithSurface(edgeface2.geometry)[0]
-        # vector: core.Vector3D = startPoint.vectorTo(endPoint)
 
+        # 原点へのマトリックス
         toOriginMat: core.Matrix3D = self._get_matrix_to_origin(
             startPoint,
             self.sideVector,
             self.axis.direction
-            # vector
         )
 
-        # sectionFace: fusion.BRepBody = self._get_large_face(
-        #     self.root.yConstructionAxis.geometry,
-        #     core.Point3D.create(
-        #         self.largeValue,
-        #         0,
-        #         0,
-        #     )
-        # )
-        # self._draw_bodies([sectionFace])
+        # 断面用の面
+        sectionFace: fusion.BRepBody = self._get_large_face_xy(self.largeValue)
 
-        sectionMats: list = self._get_rotation_matrix_list(
-            [0, 90, 180, 270]
-        )
-
-        sectionFaces: list = self._get_profile_base_faces(
-            # sectionFace,
-            self._get_large_face(
-                self.root.yConstructionAxis.geometry,
-                core.Point3D.create(
-                    self.largeValue,
-                    0,
-                    0,
-                )
-            ),
-            sectionMats
-        )
-        # self._draw_bodies(sectionFaces)
-
-        count = 90
+        # 回転用マトリックス 180Degで作業する
         mat: core.Matrix3D = core.Matrix3D.create()
         mat.setToRotation(
-            math.radians(90 / count),
+            math.radians(180 / count),
             self.root.yConstructionAxis.geometry.direction,
             self.root.originConstructionPoint.geometry,
         )
 
+        # ツール用ボディ
         toolBaseBody: fusion.BRepBody = self.tmpMgr.copy(self.body)
         self.tmpMgr.transform(toolBaseBody, toOriginMat)
 
+        # 回転させ削りまくる
         for idx in range(count):
-            toolAngBody: fusion.BRepBody = self.tmpMgr.copy(toolBaseBody)
-            for sectIdx, sectionFace in enumerate(sectionFaces):
-                toolBody: fusion.BRepBody = self.tmpMgr.copy(toolAngBody)
-                try:
-                    self.tmpMgr.booleanOperation(
-                        sectionFace,
-                        toolBody,
-                        fusion.BooleanTypes.DifferenceBooleanType
-                    )
-                except:
-                    print(f'ng:{idx}-{sectIdx}')
+            toolBody: fusion.BRepBody = self.tmpMgr.copy(toolBaseBody)
+            try:
+                self.tmpMgr.booleanOperation(
+                    sectionFace,
+                    toolBody,
+                    fusion.BooleanTypes.DifferenceBooleanType
+                )
+            except:
+                print(f'ng:{idx}')
+
             self.tmpMgr.transform(
                 toolBaseBody,
                 mat
             )
 
-        self._draw_bodies(sectionFaces)
+        # Xのマイナス半面だけ取得
+        sectHalf = self._get_intersect_body(
+            [
+                self.tmpMgr.copy(sectionFace),
+                self._get_large_face_xy_half(
+                    self.largeValue,
+                    False
+                )
+            ]
+        )
 
-        # resBody: fusion.BRepBody = self._get_large_face(
-        #         self.root.yConstructionAxis.geometry,
-        #         core.Point3D.create(
-        #             self.largeValue,
-        #             0,
-        #             0,
-        #         )
-        #     )
+        # 180度Deg回転させる
+        mats = self._get_rotation_matrix_list([180])
+        self.tmpMgr.transform(
+            sectHalf,
+            mats[0]
+        )
 
-        # self.tmpMgr.booleanOperation(
-        #     resBody,
-        #     sectionFace,
-        #     fusion.BooleanTypes.DifferenceBooleanType
-        # )
+        # 積
+        sectionFace: fusion.BRepBody = self._get_intersect_body(
+            [
+                sectionFace,
+                sectHalf
+            ]
+        )
 
-        # fromOriginMat: core.Matrix3D = toOriginMat
-        # fromOriginMat.invert()
+        # 差
+        resBody: fusion.BRepBody = self._get_large_face_xy_half(
+            self.largeValue,
+            True
+        )
 
-        # self.tmpMgr.transform(
-        #     resBody,
-        #     fromOriginMat
-        # )
+        self.tmpMgr.booleanOperation(
+            resBody,
+            sectionFace,
+            fusion.BooleanTypes.DifferenceBooleanType
+        )
 
-        # self._draw_bodies([resBody])
+        # 元の位置に戻す
+        fromOriginMat: core.Matrix3D = toOriginMat
+        fromOriginMat.invert()
+
+        self.tmpMgr.transform(
+            resBody,
+            fromOriginMat
+        )
+
+        # 出力
+        displayAngle = 180 / count
+        occ: fusion.Occurrence = self._create_occ(
+            'SpunProfile_Spin-' + f'Angle_{displayAngle}Deg'
+        )
+
+        bodyList: list = self._draw_bodies(
+            [
+                resBody
+            ],
+            occ,
+        )
+
+        sktPlane: fusion.ConstructionPlane = self._create_construction_plane(
+            occ,
+            startPoint,
+            self.axis.direction,
+            self.sideVector,
+        )
+
+        skt: fusion.Sketch = occ.component.sketches.add(
+            sktPlane
+        )
+
+        objs: core.ObjectCollection = core.ObjectCollection.create()
+        for b in bodyList:
+            [objs.add(e) for e in b.edges]
+
+        skt.isComputeDeferred = True
+        skt.project(objs)
+        crv: fusion.SketchCurve = None
+        for crv in skt.sketchCurves:
+            crv.isReference = False
+        skt.isComputeDeferred = False
+
 
         self.app.log(
             f'spun_profile_spin time:{time.time() - startTime}s'
         )
 
 
-    def _get_disply_pitch_str(
+    def _create_construction_plane(
         self,
-        value: float) -> str:
+        occurrence: fusion.Occurrence,
+        origin: core.Point3D,
+        vectorU: core.Vector3D,
+        vectorV: core.Vector3D,
+    ) -> fusion.ConstructionPlane:
         '''
-        ドキュメント設定の長さ単位付き値
+        平面作成
         '''
 
-        unitMgr: core.UnitsManager = self.app.activeProduct.unitsManager
-        valueDisp = unitMgr.convert(
-            value,
-            unitMgr.internalUnits,
-            unitMgr.defaultLengthUnits)
-        
-        return f'{valueDisp}{unitMgr.defaultLengthUnits}'
+        vectorU.normalize()
+        vectorV.normalize()
+        basePlane: core.Plane = core.Plane.createUsingDirections(
+            origin,
+            vectorU,
+            vectorV,
+        )
+
+        comp: fusion.Component = occurrence.component
+        des: fusion.Design = comp.parentDesign
+        baseFeat: fusion.BaseFeature = None
+        if des.designType == fusion.DesignTypes.ParametricDesignType:
+            baseFeat = comp.features.baseFeatures.add()
+
+        constPlanes: fusion.ConstructionPlanes = comp.constructionPlanes
+        planeIpt: fusion.ConstructionPlaneInput = constPlanes.createInput(
+            occurrence
+        )
+
+        if baseFeat:
+            baseFeat.startEdit()
+
+        planeIpt.setByPlane(basePlane)
+        constPlane: fusion.ConstructionPlane = constPlanes.add(
+            planeIpt
+        )
+
+        if baseFeat:
+            baseFeat.finishEdit()
+
+        return constPlane
 
 
     def _create_occ(
         self,
-        name: str) -> fusion.Occurrence:
+        name: str
+    ) -> fusion.Occurrence:
         '''
         オカレンス作成
         '''
@@ -252,9 +251,25 @@ class SpunProfileFactry():
 
         return occ
 
+
+    def _get_intersect_body(
+        self,
+        bodyLst: list
+    ) -> fusion.BRepBody:
+        '''
+        ブーリアン積のボディ取得
+        '''
+
+        return self._get_boolean_body(
+            bodyLst,
+            fusion.BooleanTypes.IntersectionBooleanType
+        )
+
+
     def _get_union_body(
         self,
-        bodyLst: list) -> fusion.BRepBody:
+        bodyLst: list
+    ) -> fusion.BRepBody:
         '''
         ブーリアン和のボディ取得
         '''
@@ -267,7 +282,8 @@ class SpunProfileFactry():
 
     def _get_diff_body(
         self,
-        bodyLst: list) -> fusion.BRepBody:
+        bodyLst: list
+    ) -> fusion.BRepBody:
         '''
         ブーリアン差のボディ取得
         '''
@@ -281,7 +297,8 @@ class SpunProfileFactry():
     def _get_boolean_body(
         self,
         bodyLst: list,
-        booleanType: fusion.BooleanTypes) -> fusion.BRepBody:
+        booleanType: fusion.BooleanTypes
+    ) -> fusion.BRepBody:
         '''
         ブーリアンボディ取得
         '''
@@ -308,7 +325,8 @@ class SpunProfileFactry():
 
     def _get_axis(
         self,
-        axisEntity) -> core.InfiniteLine3D:
+        axisEntity
+    ) -> core.InfiniteLine3D:
         '''
         要素から軸となる無限線取得
         '''
@@ -348,15 +366,11 @@ class SpunProfileFactry():
         self,
         bBox: core.OrientedBoundingBox3D,
         axis,
-        radius: float) -> fusion.BRepFace:
+        radius: float
+    ) -> fusion.BRepFace:
         '''
         シリンダー面の取得
         '''
-
-        # bBox: core.OrientedBoundingBox3D = self._get_boundingBox(
-        #     self.body,
-        #     self.axis.direction
-        # )
 
         interPoint: core.Point3D = self._get_intersect_point_from_infinite(
             bBox.centerPoint,
@@ -378,7 +392,8 @@ class SpunProfileFactry():
         self,
         startPoint: core.Point3D,
         endPoint: core.Point3D,
-        radius:float) -> fusion.BRepBody:
+        radius:float
+    ) -> fusion.BRepBody:
         '''
         シリンダーボディ(ソリッド)の取得
         '''
@@ -412,7 +427,8 @@ class SpunProfileFactry():
     def _get_length_range_points(
         self,
         bBox: core.OrientedBoundingBox3D,
-        refPoint: core.Point3D) -> set:
+        refPoint: core.Point3D
+    ) -> set:
         '''
         長さ方向範囲の最大最小点の取得
         '''
@@ -436,7 +452,8 @@ class SpunProfileFactry():
     def _get_boundingBox(
         self,
         body: fusion.BRepBody,
-        axis: core.Vector3D) -> core.OrientedBoundingBox3D:
+        axis: core.Vector3D
+    ) -> core.OrientedBoundingBox3D:
         '''
         バウンダリボックス取得
         '''
@@ -457,7 +474,7 @@ class SpunProfileFactry():
         直角ベクトルの取得
         '''
 
-        tmpVec: core.Vector3D = core.Vector3D.create(1,0,0)
+        tmpVec: core.Vector3D = core.Vector3D.create(0,0,1)
         if vector.isParallelTo(tmpVec):
             tmpVec = core.Vector3D.create(0,1,0)
 
@@ -467,7 +484,8 @@ class SpunProfileFactry():
     def _draw_bodies(
         self,
         bodyLst: list,
-        targetOcc: fusion.Occurrence = None) -> list:
+        targetOcc: fusion.Occurrence = None
+    ) -> list:
         '''
         bodyの出力
         '''
@@ -491,45 +509,65 @@ class SpunProfileFactry():
         else:
             resBodies = [bodies.add(body) for body in bodyLst]
 
-
         return resBodies
 
 
-    def _get_large_face(
+    def _get_large_face_xy_half(
         self,
-        axis: core.InfiniteLine3D, 
-        point: core.Point3D) -> fusion.BRepBody:
+        value: float,
+        isPlus: bool
+    ) -> fusion.BRepBody:
         '''
-        巨大な平面の取得
+        xy平面に巨大なX側に半分の平面の取得
+        '''
+
+        relative = 1 if isPlus else -1
+
+        try:
+            points = [
+                core.Point3D.create(value * relative, value, 0),
+                core.Point3D.create(0, value, 0),
+                core.Point3D.create(0, -value, 0),
+                core.Point3D.create(value * relative, -value, 0),
+                core.Point3D.create(value * relative, value, 0),
+            ]
+
+            return self._get_large_face_form_points(points)
+        except:
+            self.app.log('Failed:\n{}'.format(traceback.format_exc()))
+
+
+    def _get_large_face_xy(
+        self,
+        value: float
+    ) -> fusion.BRepBody:
+        '''
+        xy平面に巨大な平面の取得
         '''
 
         try:
-            vec: core.Vector3D = axis.direction.copy()
+            points = [
+                core.Point3D.create(value, value, 0),
+                core.Point3D.create(-value, value, 0),
+                core.Point3D.create(-value, -value, 0),
+                core.Point3D.create(value, -value, 0),
+                core.Point3D.create(value, value, 0),
+            ]
 
-            verificationPnt: core.Point3D = point.copy()
-            insPnt: core.Point3D = self._get_intersect_point_from_infinite(
-                verificationPnt,
-                axis
-            )
-            largeVec: core.Vector3D = insPnt.vectorTo(verificationPnt)
-            verificationPnt.translateBy(largeVec)
+            return self._get_large_face_form_points(points)
+        except:
+            self.app.log('Failed:\n{}'.format(traceback.format_exc()))
 
-            points = []
 
-            vec.scaleBy(self.largeValue)
-            p: core.Point3D = verificationPnt.copy()
-            p.translateBy(vec)
-            points.append(p)
+    def _get_large_face_form_points(
+        self,
+        points: list
+    ) -> fusion.BRepBody:
+        '''
+        pointsを元に平面作成
+        '''
 
-            vec.scaleBy(-1)
-            p: core.Point3D = verificationPnt.copy()
-            p.translateBy(vec)
-            points.append(p)
-
-            points.append(self._get_intersect_point_from_infinite(points[1], axis))
-            points.append(self._get_intersect_point_from_infinite(points[0], axis))
-            points.append(points[0])
-
+        try:
             lines = [core.Line3D.create(p1, p2) for p1, p2 in zip(points, points[1:])]
 
             wireBody: fusion.BRepBody = None
@@ -538,3 +576,54 @@ class SpunProfileFactry():
             return self.tmpMgr.createFaceFromPlanarWires([wireBody])
         except:
             self.app.log('Failed:\n{}'.format(traceback.format_exc()))
+
+
+
+    def _get_matrix_to_origin(
+        self,
+        origin: core.Point3D,
+        vectorX: core.Vector3D,
+        vectorY: core.Vector3D,
+    ) -> core.Matrix3D:
+        '''
+        原点へのマトリックス取得
+        '''
+
+        vectorZ: core.Vector3D = vectorX.crossProduct(vectorY)
+        vectorY: core.Vector3D = vectorZ.crossProduct(vectorX)
+        vectorX.normalize()
+        vectorY.normalize()
+        vectorZ.normalize()
+
+        fromMat: core.Matrix3D = core.Matrix3D.create()
+        fromMat.setWithCoordinateSystem(
+            origin,
+            vectorX,
+            vectorY,
+            vectorZ
+        )
+
+        fromMat.invert()
+
+        return fromMat
+
+
+    def _get_rotation_matrix_list(
+        self,
+        angles: list
+    ) -> list:
+        '''
+        断面用のY軸回転マトリックス取得
+        '''
+
+        matLst = []
+        for ang in angles:
+            mat: core.Matrix3D = core.Matrix3D.create()
+            mat.setToRotation(
+                math.radians(ang),
+                self.root.yConstructionAxis.geometry.direction,
+                self.root.originConstructionPoint.geometry,
+            )
+            matLst.append(mat)
+
+        return matLst

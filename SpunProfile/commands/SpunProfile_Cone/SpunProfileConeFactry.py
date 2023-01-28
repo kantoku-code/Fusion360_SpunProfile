@@ -92,9 +92,9 @@ class SpunProfileFactry():
 
         resBody: fusion.BRepBody = self._get_union_body(corns)
 
-        displyPitch = self._get_disply_pitch_str(pitch)
+        displayPitch = self._get_disply_pitch_str(pitch)
         occ: fusion.Occurrence = self._create_occ(
-            'SpunProfile_' + f'pitch_{displyPitch}'
+            'SpunProfile_' + f'pitch_{displayPitch}'
         )
 
         self._draw_bodies(
@@ -105,7 +105,7 @@ class SpunProfileFactry():
         )
 
         self.app.log(
-            f'spun_profile_cone pitch:{displyPitch} time:{time.time() - startTime}s'
+            f'spun_profile_cone pitch:{displayPitch} time:{time.time() - startTime}s'
         )
 
 

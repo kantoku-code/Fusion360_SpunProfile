@@ -1,11 +1,11 @@
-import adsk.core
-import adsk.fusion
+import adsk.core as core
+import adsk.fusion as fusion
 import os
 from ...lib import fusion360utils as futil
 from ... import config
 from .SpunProfileSpinFactry import SpunProfileFactry
 
-app = adsk.core.Application.get()
+app = core.Application.get()
 ui = app.userInterface
 
 
@@ -46,9 +46,14 @@ ICON_FOLDER = os.path.join(
 # それらは解放されず、ガベージコレクションされません。
 local_handlers = []
 
-_bodyIpt: adsk.core.SelectionCommandInput = None
-_axisIpt: adsk.core.SelectionCommandInput = None
-_pitchIpt: adsk.core.ValueCommandInput = None
+_bodyIpt: core.SelectionCommandInput = None
+_axisIpt: core.SelectionCommandInput = None
+_toleranceIpt: core.DropDownCommandInput = None
+_toleranceItems: dict = {
+    '高': 180 / 1,
+    '中': 180 / 2,
+    '低': 180 / 20, #5,
+}
 
 _fact: 'SpunProfileFactry' = None
 
@@ -104,14 +109,14 @@ def stop():
         command_definition.deleteMe()
 
 
-def command_created(args: adsk.core.CommandCreatedEventArgs):
+def command_created(args: core.CommandCreatedEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
-    cmd: adsk.core.Command = adsk.core.Command.cast(args.command)
+    cmd: core.Command = core.Command.cast(args.command)
     cmd.isPositionDependent = True
 
     # **inputs**
-    inputs: adsk.core.CommandInputs = cmd.commandInputs
+    inputs: core.CommandInputs = cmd.commandInputs
 
     global _bodyIpt
     _bodyIpt = inputs.addSelectionInput(
@@ -120,7 +125,7 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
         '該当するソリッドボディを選択してください'
     )
     _bodyIpt.setSelectionLimits(0)
-    _bodyIpt.addSelectionFilter(adsk.core.SelectionCommandInput.SolidBodies)
+    _bodyIpt.addSelectionFilter(core.SelectionCommandInput.SolidBodies)
     _bodyIpt.tooltip = 'ソリッドボディが選択可能です'
 
     global _axisIpt
@@ -131,29 +136,25 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     )
     _axisIpt.setSelectionLimits(0)
     filterLst = [
-        adsk.core.SelectionCommandInput.ConstructionLines,
-        # adsk.core.SelectionCommandInput.SketchLines,
-        adsk.core.SelectionCommandInput.CylindricalFaces,
-        adsk.core.SelectionCommandInput.ConicalFaces,
-        adsk.core.SelectionCommandInput.LinearEdges,
+        core.SelectionCommandInput.ConstructionLines,
+        # core.SelectionCommandInput.SketchLines,
+        core.SelectionCommandInput.CylindricalFaces,
+        core.SelectionCommandInput.ConicalFaces,
+        core.SelectionCommandInput.LinearEdges,
     ]
     [_axisIpt.addSelectionFilter(f) for f in filterLst]
     _axisIpt.tooltip = '構築軸・円筒面・円錐面・直線のエッジが選択可能です'
 
-    global _pitchIpt
-    unitMgr: adsk.core.UnitsManager = futil.app.activeProduct.unitsManager
-    _pitchIpt = inputs.addValueInput(
-        '_pitchIptId',
-        'ピッチ',
-        unitMgr.defaultLengthUnits,
-        adsk.core.ValueInput.createByReal(0.1)
+    global _toleranceIpt, _toleranceItems
+    _toleranceIpt = inputs.addDropDownCommandInput(
+        '_toleranceIptId',
+        'トレランス',
+        core.DropDownStyles.TextListDropDownStyle
     )
-    _pitchIpt.minimumValue = 0.0001
-    minValueDisp = unitMgr.convert(
-        _pitchIpt.minimumValue,
-        unitMgr.internalUnits,
-        unitMgr.defaultLengthUnits)
-    _pitchIpt.tooltip = f'{minValueDisp}{unitMgr.defaultLengthUnits}以上で設定可能です'
+    tolListItems: core.ListItems = _toleranceIpt.listItems
+    for key in _toleranceItems.keys():
+        tolListItems.add(key, False, '')
+    tolListItems[0].isSelected = True
 
     # **event**
     futil.add_handler(
@@ -198,7 +199,7 @@ def command_created(args: adsk.core.CommandCreatedEventArgs):
     _fact = SpunProfileFactry()
 
 
-def command_validateInputs(args: adsk.core.ValidateInputsEventArgs):
+def command_validateInputs(args: core.ValidateInputsEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
     global _bodyIpt, _axisIpt
@@ -208,7 +209,7 @@ def command_validateInputs(args: adsk.core.ValidateInputsEventArgs):
         args.areInputsValid = False
 
 
-def command_preSelect(args: adsk.core.SelectionEventArgs):
+def command_preSelect(args: core.SelectionEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
     if args.activeInput.selectionCount > 0:
@@ -221,29 +222,33 @@ def command_preSelect(args: adsk.core.SelectionEventArgs):
     args.isSelectable =  _fact.has_axis(args.selection.entity)
 
 
-def command_destroy(args: adsk.core.CommandEventArgs):
+def command_destroy(args: core.CommandEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
     global local_handlers
     local_handlers = []
 
 
-# def command_executePreview(args: adsk.core.CommandEventArgs):
+# def command_executePreview(args: core.CommandEventArgs):
 #     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
 
-def command_execute(args: adsk.core.CommandEventArgs):
+def command_execute(args: core.CommandEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
-    global _bodyIpt, _axisIpt, _pitchIpt, _fact
+    global _toleranceIpt, _toleranceItems
+    value = _toleranceItems[_toleranceIpt.selectedItem.name]
+
+    global _bodyIpt, _axisIpt, _fact
+
     _fact.get_spun_profile_body(
         _bodyIpt.selection(0).entity,
         _axisIpt.selection(0).entity,
-        _pitchIpt.value,
+        int(value)
     )
 
 
-def command_inputChanged(args: adsk.core.InputChangedEventArgs):
+def command_inputChanged(args: core.InputChangedEventArgs):
     # futil.log(f'{CMD_NAME}:{args.firingEvent.name}')
 
     global _bodyIpt, _axisIpt, _fact
@@ -262,14 +267,14 @@ def command_inputChanged(args: adsk.core.InputChangedEventArgs):
 
 
 def get_click_face(
-    sel: adsk.core.Selection) -> adsk.fusion.BRepFace:
+    sel: core.Selection) -> fusion.BRepFace:
 
-    des: adsk.fusion.Design = futil.app.activeProduct
-    root: adsk.fusion.Component = des.rootComponent
+    des: fusion.Design = futil.app.activeProduct
+    root: fusion.Component = des.rootComponent
 
     entities = root.findBRepUsingPoint(
         sel.point,
-        adsk.fusion.BRepEntityTypes.BRepFaceEntityType,
+        fusion.BRepEntityTypes.BRepFaceEntityType,
         0.1
     )
 
