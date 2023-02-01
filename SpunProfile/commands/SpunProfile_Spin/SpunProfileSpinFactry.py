@@ -7,7 +7,7 @@ import math
 import time
 
 TOTAL_ROTATION_ANGLE = 180
-DEBUG = True
+DEBUG = False
 
 class SpunProfileFactry():
     def __init__(self) -> None:
@@ -111,7 +111,7 @@ class SpunProfileFactry():
             self.camera.isSmoothTransition = False
 
             # 原点に移動
-            self._move_to_origin_camera()
+            self._move_to_origin_camera(toOriginMat)
 
             # cg
             cgMgr = CustomGraphicsManager()
@@ -128,7 +128,7 @@ class SpunProfileFactry():
             except:
                 print(f'ng:{idx}')
 
-            if isAnimation and idx % 2 == 0:
+            if isAnimation and idx % 3 == 0:
                 cgMgr.update(sectionFace, toolBody)
 
             self.tmpMgr.transform(
@@ -246,9 +246,9 @@ class SpunProfileFactry():
 
         sketch.isComputeDeferred = True
         sketch.project(objs)
-        crv: fusion.SketchCurve = None
-        for crv in sketch.sketchCurves:
-            crv.isReference = False
+        # crv: fusion.SketchCurve = None
+        # for crv in sketch.sketchCurves:
+        #     crv.isReference = False
         sketch.isComputeDeferred = False
 
 
@@ -712,7 +712,8 @@ class SpunProfileFactry():
 
 
     def _move_to_origin_camera(
-        self
+        self,
+        eyeMatrix: core.Matrix3D,
     ) -> None:
         '''
         カメラを原点に移動
@@ -729,6 +730,7 @@ class SpunProfileFactry():
 
         eyePnt: core.point3D = camera.eye
         eyePnt.translateBy(cameraVec)
+        # eyePnt.transformBy(eyeMatrix)
         camera.eye = eyePnt
 
         camera.isSmoothTransition = False

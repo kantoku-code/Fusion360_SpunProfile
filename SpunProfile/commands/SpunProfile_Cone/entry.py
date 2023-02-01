@@ -15,7 +15,7 @@ CMD_ID = f'{config.COMPANY_NAME}_{config.ADDIN_NAME}_spunProfileCone'
 CMD_NAME = '回転プロファイル(コーン)'
 CMD_Description = '回転プロファイルの作成'
 # パネルにコマンドを昇格させることを指定します。
-IS_PROMOTED = True
+IS_PROMOTED = False
 
 # TODO *** コマンドボタンが作成される場所を定義します。 ***
 # これは、ワークスペース、タブ、パネル、および 
